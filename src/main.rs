@@ -42,11 +42,18 @@ impl App {
     fn button(&mut self,btn : &Button) {
         let last_direction = self.snake.direction.clone();
         self.snake.direction = match btn {
-            &Button::Keyboard(Key::Up) => Direction::Up,
-            &Button::Keyboard(Key::Down) => Direction::Down,
-            &Button::Keyboard(Key::Right) => Direction::Right,
-            &Button::Keyboard(Key::Left) => Direction::Left,
+            &Button::Keyboard(Key::Up) => if last_direction!=Direction::Down {Direction::Up}else{last_direction},
+            &Button::Keyboard(Key::Down) => if last_direction!=Direction::Up {Direction::Down}else{last_direction},
+            &Button::Keyboard(Key::Right) => if last_direction!=Direction::Left {Direction::Right}else{last_direction},
+            &Button::Keyboard(Key::Left) => if last_direction!=Direction::Right {Direction::Left}else{last_direction},
             _ => last_direction,
+        }
+    }
+    fn colision_check(&mut self) {
+        if self.snake.body.front() == Some(&(self.food.pos_x,self.food.pos_y)){
+            self.snake.food_check = true;
+            self.food.pos_x = rand::thread_rng().gen_range(0..30) as f64;
+            self.food.pos_y = rand::thread_rng().gen_range(0..20) as f64;
         }
     }
 }
@@ -78,6 +85,7 @@ impl Food {
 struct Snake {
     body: LinkedList<(f64,f64)>,
     direction: Direction,
+    food_check: bool,
 }
 impl Snake {
     fn render(&self, gl: &mut GlGraphics, args: &RenderArgs) {
@@ -109,7 +117,7 @@ impl Snake {
             Direction::Down => new_head.1 += 1.0,
         }
         self.body.push_front(new_head);
-        self.body.pop_back();
+        if self.food_check == true {self.food_check = false} else {self.body.pop_back();};
     }
 
 }
@@ -135,10 +143,10 @@ fn main() {
 
     let mut app = App {
         gl: GlGraphics::new(opengl),
-        snake: Snake{body: LinkedList::from_iter((vec![(0.0,0.0),(0.0,1.0)]).into_iter()),direction:Direction::Right},
+        snake: Snake{body: LinkedList::from_iter((vec![(0.0,0.0)]).into_iter()),direction:Direction::Right,food_check:false},
         food: Food{pos_x:rand::thread_rng().gen_range(0..30) as f64,pos_y:rand::thread_rng().gen_range(0..20) as f64},
     };
-    let mut events = Events::new(EventSettings::new()).ups(4);
+    let mut events = Events::new(EventSettings::new()).ups(8);
     while let Some(e) = events.next(&mut window) {
         if let Some(args) = e.render_args() {
             app.render(&args);
@@ -146,6 +154,7 @@ fn main() {
 
         if let Some(_args) = e.update_args() {
             app.update();
+            app.colision_check();
         }
         if let Some(args) = e.button_args() {
             if args.state == ButtonState::Press {
