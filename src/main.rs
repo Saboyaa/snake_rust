@@ -8,16 +8,18 @@ use opengl_graphics::{GlGraphics, OpenGL};
 use piston::event_loop::{EventSettings, Events};
 use piston::input::{RenderArgs, RenderEvent, UpdateEvent};
 use piston::window::WindowSettings;
-use piston::{Button, ButtonArgs, EventLoop};
+use piston::{Button, EventLoop};
 use crate::piston::ButtonEvent;
 use piston::ButtonState;
 use piston::Key;
+use std::collections::LinkedList;
+use std::iter::FromIterator;
+use rand::prelude::*;
 
 pub struct App {
     gl: GlGraphics, // OpenGL drawing backend. 
     snake: Snake,
-    x: f64,
-    y: f64,
+    food: Food,
 }
 
 impl App {
@@ -26,11 +28,12 @@ impl App {
 
         const GREEN: [f32; 4] = [0.0, 1.0, 0.0, 1.0];
 
-        self.gl.draw(args.viewport(), |c, gl| {
+        self.gl.draw(args.viewport(), |_c, gl| {
             // Clear the screen.
             clear(GREEN, gl);
         });
         self.snake.render(&mut self.gl, args);
+        self.food.render(&mut self.gl, args);
     }
 
     fn update(&mut self) {
@@ -48,10 +51,32 @@ impl App {
     }
 }
 
-#[derive(Clone)]
-struct Snake {
+struct Food {
     pos_x: f64,
     pos_y: f64,
+}
+impl Food {
+    fn render(&self, gl: &mut GlGraphics, args: &RenderArgs) {
+        use graphics::*;
+
+        const RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
+
+        let square = rectangle::square(self.pos_x * 50.0,self.pos_y * 50.0, 50.0);
+
+        gl.draw(args.viewport(), |c, gl| {
+            let transform = c
+                .transform;
+
+            // Draw a box rotating around the middle of the screen.
+            rectangle(RED, square, transform, gl);
+        });
+    }
+
+}
+
+#[derive(Clone)]
+struct Snake {
+    body: LinkedList<(f64,f64)>,
     direction: Direction,
 }
 impl Snake {
@@ -60,22 +85,31 @@ impl Snake {
 
         const RED: [f32; 4] = [1.0, 0.0, 0.0, 1.0];
 
-        let square = rectangle::square((self.pos_x * 50.0),(self.pos_y * 50.0), 50.0);
+        let squares: Vec<graphics::types::Rectangle> = self.body
+            .iter()
+            .map(|&(x,y)|{
+                graphics::rectangle::square(x * 50.0,y * 50.0, 50.0)
+            })
+            .collect();
 
         gl.draw(args.viewport(), |c, gl| {
             let transform = c.transform;
-            rectangle(RED, square, transform, gl);
+            squares.into_iter()
+                .for_each(|square|
+                    rectangle(RED, square, transform, gl))
         });
     }
 
     fn update(&mut self) {
+        let mut new_head = (*self.body.front().expect("No head")).clone();
         match self.direction {
-            Direction::Left => self.pos_x += -1.0,
-            Direction::Right => self.pos_x += 1.0,
-            Direction::Up => self.pos_y += -1.0,
-            Direction::Down => self.pos_y += 1.0,
+            Direction::Left => new_head.0 += -1.0,
+            Direction::Right => new_head.0 += 1.0,
+            Direction::Up => new_head.1 += -1.0,
+            Direction::Down => new_head.1 += 1.0,
         }
-
+        self.body.push_front(new_head);
+        self.body.pop_back();
     }
 
 }
@@ -92,7 +126,7 @@ fn main() {
     let opengl = OpenGL::V3_2;
 
     // Create a Glutin window.
-    let mut window: Window = WindowSettings::new("snake game", [1500, 1500])
+    let mut window: Window = WindowSettings::new("snake game", [1500, 1000])
         .graphics_api(opengl)
         .exit_on_esc(true)
         .build()
@@ -101,9 +135,8 @@ fn main() {
 
     let mut app = App {
         gl: GlGraphics::new(opengl),
-        snake: Snake{pos_x: 0.0, pos_y:0.0,direction:Direction::Right},
-        x: 0.0,
-        y: 0.0,
+        snake: Snake{body: LinkedList::from_iter((vec![(0.0,0.0),(0.0,1.0)]).into_iter()),direction:Direction::Right},
+        food: Food{pos_x:rand::thread_rng().gen_range(0..30) as f64,pos_y:rand::thread_rng().gen_range(0..20) as f64},
     };
     let mut events = Events::new(EventSettings::new()).ups(4);
     while let Some(e) = events.next(&mut window) {
@@ -111,7 +144,7 @@ fn main() {
             app.render(&args);
         }
 
-        if let Some(args) = e.update_args() {
+        if let Some(_args) = e.update_args() {
             app.update();
         }
         if let Some(args) = e.button_args() {
