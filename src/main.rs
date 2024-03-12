@@ -49,7 +49,15 @@ impl App {
             _ => last_direction,
         }
     }
-    fn colision_check(&mut self) {
+    fn colision_check(&mut self)-> bool {
+        let mut clone_snake = self.snake.body.clone();
+        clone_snake.pop_front();
+        if clone_snake.contains(self.snake.body.front().unwrap()){
+            return true;
+        }
+        else{return false;}
+    }
+    fn colision_check_food(&mut self) {
         if self.snake.body.front() == Some(&(self.food.pos_x,self.food.pos_y)){
             self.snake.food_check = true;
             self.food.pos_x = rand::thread_rng().gen_range(0..30) as f64;
@@ -146,6 +154,7 @@ fn main() {
         snake: Snake{body: LinkedList::from_iter((vec![(0.0,0.0)]).into_iter()),direction:Direction::Right,food_check:false},
         food: Food{pos_x:rand::thread_rng().gen_range(0..30) as f64,pos_y:rand::thread_rng().gen_range(0..20) as f64},
     };
+    let mut game_over = false;
     let mut events = Events::new(EventSettings::new()).ups(8);
     while let Some(e) = events.next(&mut window) {
         if let Some(args) = e.render_args() {
@@ -153,8 +162,9 @@ fn main() {
         }
 
         if let Some(_args) = e.update_args() {
-            app.update();
-            app.colision_check();
+            if !game_over {app.update();};
+            app.colision_check_food();
+            if app.colision_check() {game_over = true;};
         }
         if let Some(args) = e.button_args() {
             if args.state == ButtonState::Press {
